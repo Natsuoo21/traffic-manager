@@ -18,16 +18,17 @@ class LinkedInConnector(AdPlatformConnector):
         self.account_id = settings.linkedin_ad_account_id
         self.headers = {
             "Authorization": f"Bearer {settings.linkedin_access_token}",
-            "LinkedIn-Version": "202404",
+            "LinkedIn-Version": "202604",
             "X-Restli-Protocol-Version": "2.0.0",
             "Content-Type": "application/json",
         }
         self.client = httpx.Client(base_url=BASE_URL, headers=self.headers, timeout=30)
+        self._account_path = f"/adAccounts/{self.account_id}"
         logger.info(f"LinkedIn connector initialized for account {self.account_id}")
 
     def test_connection(self) -> bool:
         try:
-            resp = self.client.get(f"/adAccounts/{self.account_id}")
+            resp = self.client.get(self._account_path)
             resp.raise_for_status()
             return True
         except Exception as e:
@@ -36,16 +37,14 @@ class LinkedInConnector(AdPlatformConnector):
 
     def get_campaigns(self, status_filter: str | None = None) -> list[dict[str, Any]]:
         # LinkedIn calls these "Campaign Groups"
-        params: dict[str, Any] = {
-            "q": "search",
-            "search": f"(account:(values:List(urn:li:sponsoredAccount:{self.account_id})))",
-        }
+        # New API: account in path, search for status only
+        params: dict[str, Any] = {"q": "search"}
         if status_filter:
             status_map = {"ACTIVE": "ACTIVE", "PAUSED": "PAUSED"}
             li_status = status_map.get(status_filter, status_filter)
-            params["search"] += f",(status:(values:List({li_status})))"
+            params["search"] = f"(status:(values:List({li_status})))"
 
-        resp = self.client.get("/adCampaignGroups", params=params)
+        resp = self.client.get(f"{self._account_path}/adCampaignGroups", params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -69,7 +68,7 @@ class LinkedInConnector(AdPlatformConnector):
             "q": "search",
             "search": f"(campaignGroup:(values:List(urn:li:sponsoredCampaignGroup:{campaign_id})))",
         }
-        resp = self.client.get("/adCampaigns", params=params)
+        resp = self.client.get(f"{self._account_path}/adCampaigns", params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -91,7 +90,7 @@ class LinkedInConnector(AdPlatformConnector):
             "q": "search",
             "search": f"(campaign:(values:List(urn:li:sponsoredCampaign:{ad_set_id})))",
         }
-        resp = self.client.get("/adCreatives", params=params)
+        resp = self.client.get(f"{self._account_path}/adCreatives", params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -130,7 +129,7 @@ class LinkedInConnector(AdPlatformConnector):
         from_parts = date_from.split("-")
         to_parts = date_to.split("-")
 
-        params = {
+        params: dict[str, str] = {
             "q": "analytics",
             "pivot": li_pivot,
             "dateRange": (
@@ -138,13 +137,14 @@ class LinkedInConnector(AdPlatformConnector):
                 f"end:(year:{to_parts[0]},month:{to_parts[1]},day:{to_parts[2]}))"
             ),
             "timeGranularity": "DAILY",
-            "campaigns": f"List({entity_urn})" if entity_type == "ad_set" else "",
-            "campaignGroups": f"List({entity_urn})" if entity_type == "campaign" else "",
-            "creatives": f"List({entity_urn})" if entity_type == "ad" else "",
             "fields": "impressions,clicks,costInLocalCurrency,externalWebsiteConversions",
         }
-        # Remove empty params
-        params = {k: v for k, v in params.items() if v}
+        if entity_type == "ad_set":
+            params["campaigns"] = f"List({entity_urn})"
+        elif entity_type == "campaign":
+            params["campaignGroups"] = f"List({entity_urn})"
+        elif entity_type == "ad":
+            params["creatives"] = f"List({entity_urn})"
 
         resp = self.client.get("/adAnalytics", params=params)
         resp.raise_for_status()
@@ -172,7 +172,7 @@ class LinkedInConnector(AdPlatformConnector):
 
     def update_campaign_status(self, campaign_id: str, status: str) -> dict[str, Any]:
         resp = self.client.post(
-            f"/adCampaignGroups/{campaign_id}",
+            f"{self._account_path}/adCampaignGroups/{campaign_id}",
             json={"patch": {"$set": {"status": status}}},
         )
         resp.raise_for_status()
@@ -180,7 +180,7 @@ class LinkedInConnector(AdPlatformConnector):
 
     def update_campaign_budget(self, campaign_id: str, amount: float) -> dict[str, Any]:
         resp = self.client.post(
-            f"/adCampaignGroups/{campaign_id}",
+            f"{self._account_path}/adCampaignGroups/{campaign_id}",
             json={"patch": {"$set": {"totalBudget": {"amount": str(amount), "currencyCode": "BRL"}}}},
         )
         resp.raise_for_status()
