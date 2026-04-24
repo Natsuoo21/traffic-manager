@@ -8,17 +8,21 @@ _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 def get_connection(db_path: str) -> sqlite3.Connection:
     """Create a SQLite connection with WAL mode and foreign keys."""
-    conn = sqlite3.connect(db_path)
+    if db_path == ":memory:":
+        conn = sqlite3.connect("file::memory:?cache=shared", uri=True)
+    else:
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
 def init_db(db_path: str) -> None:
     """Initialize the database: create directory, run schema."""
-    path = Path(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if db_path != ":memory:":
+        path = Path(db_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
     schema_sql = _SCHEMA_PATH.read_text()
     conn = get_connection(db_path)
@@ -27,7 +31,8 @@ def init_db(db_path: str) -> None:
         conn.commit()
         logger.info(f"Database initialized at {db_path}")
     finally:
-        conn.close()
+        if db_path != ":memory:":
+            conn.close()
 
 
 class Database:
@@ -35,7 +40,11 @@ class Database:
 
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._keeper: sqlite3.Connection | None = None
         init_db(db_path)
+        # Keep a connection alive for in-memory shared cache DBs
+        if db_path == ":memory:":
+            self._keeper = get_connection(db_path)
 
     def connection(self) -> sqlite3.Connection:
         return get_connection(self.db_path)

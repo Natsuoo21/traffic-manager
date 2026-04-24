@@ -57,6 +57,7 @@ from app.api.campaigns import router as campaigns_router  # noqa: E402
 from app.api.health import router as health_router  # noqa: E402
 from app.api.metrics import router as metrics_router  # noqa: E402
 from app.api.reports import router as reports_router  # noqa: E402
+from app.api.sync import router as sync_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["campaigns"])
@@ -64,3 +65,4 @@ app.include_router(metrics_router, prefix="/api/metrics", tags=["metrics"])
 app.include_router(alerts_router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
+app.include_router(sync_router, prefix="/api/sync", tags=["sync"])
