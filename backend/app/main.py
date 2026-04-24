@@ -52,6 +52,7 @@ app.add_middleware(
 
 # Import and register routers
 from app.api.accounts import router as accounts_router  # noqa: E402
+from app.api.actions import router as actions_router  # noqa: E402
 from app.api.alerts import router as alerts_router  # noqa: E402
 from app.api.campaigns import router as campaigns_router  # noqa: E402
 from app.api.health import router as health_router  # noqa: E402
@@ -66,3 +67,4 @@ app.include_router(alerts_router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 app.include_router(accounts_router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(sync_router, prefix="/api/sync", tags=["sync"])
+app.include_router(actions_router, prefix="/api/actions", tags=["actions"])
