@@ -98,6 +98,58 @@ Script: `scripts/diagnose_meta_leadform.py`
 
 ---
 
+## Sessao 3 — Permissoes e automacao (05/05 ~16:00)
+
+### Permissoes do App — Configuracao no Meta Developer Dashboard
+
+Confirmado via pesquisa na documentacao oficial do Meta Graph API que as **2 permissoes faltantes** estao corretas:
+
+| Permissao | Para que serve |
+|-----------|---------------|
+| `pages_manage_ads` | Listar/criar lead forms na Page, vincular form aos ad creatives |
+| `leads_retrieval` | Ler leads submetidos nos formularios (GET /{form_id}/leads) |
+
+**Permissoes completas necessarias para fluxo de lead gen:**
+
+| Permissao | Status | Funcao |
+|-----------|--------|--------|
+| `ads_management` | ✅ Ja tem | Criar/editar campanhas, ad sets, ads |
+| `ads_read` | ✅ Ja tem | Ler metricas e relatorios |
+| `pages_read_engagement` | ✅ Ja tem | Dependencia do leads_retrieval |
+| `pages_show_list` | ✅ Ja tem | Listar Pages gerenciadas |
+| `pages_manage_ads` | ⏳ Em analise | Lead forms + Page-level ads |
+| `leads_retrieval` | ⏳ Em analise | Leitura de leads |
+
+### Configuracao no App Dashboard
+
+1. **`pages_manage_ads`** — encontrado em: Casos de uso > Criar e gerenciar anuncios > Personalizar > Permissoes e recursos
+2. **`leads_retrieval`** — **NAO estava disponivel** nesse caso de uso. Foi necessario:
+   - Ir em Casos de uso > Adicionar casos de uso
+   - Adicionar **"Capturar e gerenciar leads de anuncios com a API de Marketing"**
+   - Depois de adicionado, o `leads_retrieval` ficou disponivel dentro desse novo caso de uso
+
+### Status atual
+- Ambas permissoes submetidas para analise (App Review)
+- Verificacoes de seguranca foram solicitadas pelo Meta
+- **Prazo estimado**: ate 24 horas para aprovacao
+
+### Script de automacao criado
+- **Arquivo**: `scripts/setup_meta_leadform.py`
+- **Funcao**: pipeline completo pos-aprovacao do token
+- **Steps**: (1) troca token → long-lived, (2) atualiza .env, (3) verifica permissoes, (4) encontra lead form, (5) vincula nos 6 ads, (6) verificacao final
+- **Uso**: `python scripts/setup_meta_leadform.py <TOKEN>`
+
+### Investigacao do Pixel — axisbrasil.ai/diagnostico-ia
+
+Analise completa do codigo-fonte do site revelou a causa raiz dos 2 Lead events em ~4.000 PageViews:
+
+- **Onde esta o evento**: componente React `DiagnosticoForm`, dentro de um `useEffect` que observa `g.status === "success"`
+- **Form de 5 etapas**: Nome/Empresa → Tamanho/Stack/Budget → Pain Point → Maturidade IA → WhatsApp
+- **Causas do baixo disparo**: (1) friccao de 5 steps, (2) depende de server action retornar sucesso, (3) ad blockers silenciam o `window.fbq?.()`, (4) zero tracking intermediario
+- **Detalhes completos**: ver secao "SITE (axisbrasil.ai)" mais abaixo nas Acoes
+
+---
+
 ## Problemas confirmados — Resumo
 
 ### Problema 1: Topo de Funil — ads nao tem lead form vinculado
@@ -130,24 +182,24 @@ Script: `scripts/diagnose_meta_leadform.py`
 
 ## Acoes — Ordem de prioridade
 
-### URGENTE (fazer agora)
-- [ ] **Adicionar saldo** na conta Meta (R$5,73 restando)
-- [ ] **Regerar token** no Graph API Explorer com permissoes `pages_manage_ads` + `leads_retrieval`
-  - URL: https://developers.facebook.com/tools/explorer/
-  - Selecionar app → Permissions → adicionar `pages_manage_ads`, `leads_retrieval`
-  - Gerar token → rodar `python scripts/generate_meta_token.py <TOKEN>` para trocar por long-lived
-  - Atualizar `backend/.env.development` com novo token
+### URGENTE — Ja resolvido ou em andamento
+- [x] **Saldo** — no cartao, sem problema (nao e pre-pago)
+- [x] **Permissoes do app** — `pages_manage_ads` e `leads_retrieval` submetidas para analise
+  - `pages_manage_ads`: caso de uso "Criar e gerenciar anuncios"
+  - `leads_retrieval`: caso de uso "Capturar e gerenciar leads" (adicionado na sessao 3)
+- [ ] **Aguardar aprovacao** — ate 24h (submetido em 05/05 ~16:00)
 
-### APOS REGERAR TOKEN
-- [ ] Rodar `python scripts/diagnose_meta_leadform.py` de novo para ver o lead form
-- [ ] Se form 1019246187948292 existir → vincular nos 6 ads
-- [ ] Se nao existir → criar novo lead form no Gerenciador de Anuncios
-- [ ] Vincular lead form nativo nos 4 ads do Topo + 2 do Remarketing (ou manter remarketing com conversao via pixel)
-
-### APOS TOKEN APROVADO — Script automatico
-- [ ] Gerar token no Graph API Explorer com TODAS as permissoes
-- [ ] Rodar: `python scripts/setup_meta_leadform.py <TOKEN>`
-- O script faz tudo automaticamente: troca por long-lived, atualiza .env, verifica permissoes, encontra form, vincula nos 6 ads
+### APOS APROVACAO DAS PERMISSOES
+- [ ] Ir ao Graph API Explorer: https://developers.facebook.com/tools/explorer/
+- [ ] Selecionar app Traffic Manager
+- [ ] Marcar TODAS as permissoes: `ads_management`, `ads_read`, `pages_manage_ads`, `leads_retrieval`, `pages_read_engagement`, `pages_show_list`
+- [ ] Gerar token → copiar
+- [ ] Rodar o script automatico:
+  ```
+  cd /home/andre/.claude/my\ projects/traffic-manager
+  python scripts/setup_meta_leadform.py <TOKEN>
+  ```
+- [ ] O script faz tudo: troca por long-lived, atualiza .env, verifica permissoes, encontra form, vincula nos 6 ads, verificacao final
 
 ### SITE (axisbrasil.ai) — INVESTIGACAO COMPLETA (sessao 3 — 05/05)
 - [x] Investigar onde o `fbq('track', 'Lead')` esta no codigo do site
